@@ -73,4 +73,3 @@ module.exports = async (req, res) => {
             message: "Unable to send enquiry."
         });
     }
-};
