@@ -3,7 +3,7 @@ const express = require("express");
 const fs = require("fs");
 const cors = require("cors");
 const { Resend } = require("resend");
-
+// Production deployment update
 const app = express();
 const resend = new Resend(process.env.RESEND_API_KEY);
 
