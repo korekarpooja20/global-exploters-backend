@@ -55,4 +55,43 @@ app.post("/api/enquiry", (req, res) => {
         message: "Enquiry submitted successfully!"
     });
 });
+// =========================================
+// ADMIN - GET ALL ENQUIRIES
+// =========================================
+
+app.get("/api/admin/enquiries", (req, res) => {
+
+    try {
+
+        const file = "enquiry.json";
+
+        if (!fs.existsSync(file)) {
+            return res.json([]);
+        }
+
+        const data = fs.readFileSync(file, "utf8");
+
+        if (data.trim() === "") {
+            return res.json([]);
+        }
+
+        const enquiries = JSON.parse(data);
+
+        res.json({
+            success: true,
+            enquiries: enquiries
+        });
+
+    } catch (error) {
+
+        console.error("Error loading enquiries:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Unable to load enquiries"
+        });
+
+    }
+
+});
 module.exports = app;
