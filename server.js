@@ -1,97 +1,226 @@
 require("dotenv").config();
+
 const express = require("express");
-const fs = require("fs");
 const cors = require("cors");
 const { Resend } = require("resend");
-// Production deployment update
+const { createClient } = require("@supabase/supabase-js");
+
 const app = express();
+
 const resend = new Resend(process.env.RESEND_API_KEY);
+
+const supabase = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SECRET_KEY
+);
 
 app.use(cors());
 app.use(express.json());
+
+
+// =========================================
+// HOME / TEST
+// =========================================
 
 app.get("/", (req, res) => {
     res.send("Global Exporters Backend is Working!");
 });
 
-app.post("/api/enquiry", (req, res) => {
 
-    console.log("Enquiry received:", req.body);
+// =========================================
+// CUSTOMER ENQUIRY
+// =========================================
 
-    const file = "enquiry.json";
+app.post("/api/enquiry", async (req, res) => {
 
-    let enquiries = [];
+    try {
 
-    if (fs.existsSync(file)) {
-        const data = fs.readFileSync(file, "utf8");
+        console.log("Enquiry received:", req.body);
 
-        if (data.trim() !== "") {
-            enquiries = JSON.parse(data);
+        const {
+            name,
+            company,
+            country,
+            email,
+            phone,
+            product,
+            quantity,
+            message
+        } = req.body;
+
+
+        // Save enquiry to Supabase
+        const { data, error } = await supabase
+            .from("enquiries")
+            .insert([
+                {
+                    name: name,
+                    company: company,
+                    country: country,
+                    email: email,
+                    phone: phone,
+                    product: product,
+                    quantity: quantity,
+                    message: message,
+                    status: "New"
+                }
+            ])
+            .select();
+
+
+        if (error) {
+
+            console.error("Supabase Error:", error);
+
+            return res.status(500).json({
+                success: false,
+                message: "Unable to save enquiry"
+            });
+
         }
+
+
+        console.log("Enquiry saved to Supabase:", data);
+
+
+        // Send email notification
+        const emailResult = await resend.emails.send({
+
+            from: "Global Exporters <onboarding@resend.dev>",
+
+            to: ["korekarpooja20@gmail.com"],
+
+            subject: `New Enquiry - ${product || "Product"}`,
+
+            html: `
+                <h2>New Global Exporters Enquiry</h2>
+
+                <p><strong>Name:</strong> ${name || ""}</p>
+
+                <p><strong>Company:</strong> ${company || ""}</p>
+
+                <p><strong>Country:</strong> ${country || ""}</p>
+
+                <p><strong>Email:</strong> ${email || ""}</p>
+
+                <p><strong>Phone:</strong> ${phone || ""}</p>
+
+                <p><strong>Product:</strong> ${product || ""}</p>
+
+                <p><strong>Quantity:</strong> ${quantity || ""}</p>
+
+                <p><strong>Message:</strong> ${message || ""}</p>
+            `
+        });
+
+
+        console.log("Resend result:", emailResult);
+
+
+        res.json({
+
+            success: true,
+
+            message: "Enquiry submitted successfully!"
+
+        });
+
+
+    } catch (error) {
+
+        console.error("Enquiry error:", error);
+
+        res.status(500).json({
+
+            success: false,
+
+            message: "Server error"
+
+        });
+
     }
 
-    enquiries.push({
-        id: Date.now(),
-        name: req.body.name,
-        company: req.body.company,
-        country: req.body.country,
-        email: req.body.email,
-        phone: req.body.phone,
-        product: req.body.product,
-        quantity: req.body.quantity,
-        message: req.body.message,
-        date: new Date().toISOString()
-    });
-
-    fs.writeFileSync(
-        file,
-        JSON.stringify(enquiries, null, 2)
-    );
-
-    console.log("Enquiry saved successfully!");
-
-    res.json({
-        success: true,
-        message: "Enquiry submitted successfully!"
-    });
 });
+
+
 // =========================================
 // ADMIN - GET ALL ENQUIRIES
 // =========================================
 
-app.get("/api/admin/enquiries", (req, res) => {
+app.get("/api/admin/enquiries", async (req, res) => {
 
     try {
 
-        const file = "enquiry.json";
+        console.log("Loading enquiries from Supabase...");
 
-        if (!fs.existsSync(file)) {
-            return res.json([]);
+
+        const { data, error } = await supabase
+            .from("enquiries")
+            .select("*")
+            .order("created_at", {
+                ascending: false
+            });
+
+
+        if (error) {
+
+            console.error("Supabase Admin Error:", error);
+
+            return res.status(500).json({
+
+                success: false,
+
+                message: error.message
+
+            });
+
         }
 
-        const data = fs.readFileSync(file, "utf8");
 
-        if (data.trim() === "") {
-            return res.json([]);
-        }
+        console.log("Enquiries found:", data);
 
-        const enquiries = JSON.parse(data);
 
-        res.json({
+        return res.json({
+
             success: true,
-            enquiries: enquiries
+
+            enquiries: data
+
         });
+
 
     } catch (error) {
 
-        console.error("Error loading enquiries:", error);
+        console.error("Admin API Error:", error);
 
-        res.status(500).json({
+        return res.status(500).json({
+
             success: false,
-            message: "Unable to load enquiries"
+
+            message: error.message
+
         });
 
     }
 
 });
+
+
+// =========================================
+// LOCAL SERVER
+// =========================================
+
+if (require.main === module) {
+
+    app.listen(5000, () => {
+
+        console.log(
+            "Server running at http://localhost:5000"
+        );
+
+    });
+
+}
+
+
 module.exports = app;
