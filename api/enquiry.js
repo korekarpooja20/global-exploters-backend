@@ -7,11 +7,14 @@ module.exports = async (req, res) => {
     // CORS
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    res.setHeader(
+        "Access-Control-Allow-Headers",
+        "Content-Type, Authorization"
+    );
 
-    // Preflight request
+    // Handle browser preflight request
     if (req.method === "OPTIONS") {
-        return res.status(200).end();
+        return res.status(204).end();
     }
 
     // Only POST allowed
@@ -33,7 +36,7 @@ module.exports = async (req, res) => {
             product,
             quantity,
             message
-        } = req.body;
+        } = req.body || {};
 
         // Required fields
         if (!name || !email || !product) {
@@ -43,8 +46,8 @@ module.exports = async (req, res) => {
             });
         }
 
-        // Send email
-        await resend.emails.send({
+        // Send email through Resend
+        const result = await resend.emails.send({
             from: "Global Exporters <onboarding@resend.dev>",
             to: [process.env.ENQUIRY_EMAIL],
             subject: `New Export Enquiry - ${product}`,
@@ -62,6 +65,8 @@ module.exports = async (req, res) => {
                 <p><strong>Message:</strong> ${message || "N/A"}</p>
             `
         });
+
+        console.log("Resend result:", result);
 
         return res.status(200).json({
             success: true,
